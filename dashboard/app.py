@@ -2,21 +2,29 @@
 Main Streamlit Dashboard
 Gaming Analytics Dashboard
 """
+import sys
+import os
+from pathlib import Path
+
+# CRITICAL: Add project root to Python path FIRST, before any other imports
+# This ensures Streamlit Cloud can find the src and config modules
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Now import standard libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from sqlalchemy import text
+
+# Import project modules (after path is set)
 from src.database.db_utils import db_manager
 from src.analytics.aggregations import AnalyticsService
 from src.ml.forecasting import ForecastingService
 from src.ml.predictions import PredictionService
-import sys
-from pathlib import Path
-
-# Add src to path
-sys.path.append(str(Path(__file__).parent.parent))
 
 # IMPORTANT: set_page_config() MUST be called first, before any other Streamlit commands
 st.set_page_config(
@@ -309,51 +317,30 @@ if selected_game_id:
                     avg_dur = stats.get("matches", {}).get("avg_duration_minutes", 0)
                     st.metric("Avg Duration", f"{avg_dur:.1f} min")
                     st.caption("Per match")
-                
-                if game_metrics and "match_types" in game_metrics:
-                    st.subheader("CS:GO Match Types (Steam API Attribute)")
-                    csgo_df = pd.DataFrame(game_metrics["match_types"])
-                    if not csgo_df.empty:
-                        st.dataframe(csgo_df, use_container_width=True)
             
-            # Other games - Generic display
+            # Other games
             else:
                 st.subheader(f"{selected_game} Match Statistics")
+                st.caption(f"Period: {time_period}")
+                
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Total Matches", stats.get("matches", {}).get("total", 0))
-                    st.caption(f"{time_period}")
                 with col2:
                     st.metric("Unique Players", stats.get("players", {}).get("unique_count", 0))
-                    st.caption("Distinct players")
                 with col3:
                     avg_dur = stats.get("matches", {}).get("avg_duration_minutes", 0)
                     st.metric("Avg Duration", f"{avg_dur:.1f} min")
-                    st.caption("Per match")
                 with col4:
                     avg_kills = stats.get("players", {}).get("avg_kills", 0)
                     st.metric("Avg Kills", f"{avg_kills:.1f}")
-                    st.caption("Per player")
-            
-            # Show data validation info
-            if stats.get("period_days"):
-                first_match = stats.get("matches", {}).get("first_match", "N/A")
-                last_match = stats.get("matches", {}).get("last_match", "N/A")
-                if isinstance(first_match, str) and len(first_match) > 20:
-                    first_match = first_match[:20]
-                if isinstance(last_match, str) and len(last_match) > 20:
-                    last_match = last_match[:20]
-                success_badge(f"Data validated for {stats.get('period_days')} day period | First: {first_match} | Last: {last_match}")
         
         except Exception as e:
-            st.error(f"❌ Error loading statistics: {str(e)}")
-            st.info("💡 Tip: Make sure you've run the ETL pipeline to populate data.")
-            empty_state("Unable to load game data", icon="⚠️", action_text="Please run the ETL pipeline to fetch data")
-else:
-    # All Games Comparison View
-    from src.analytics.comparison import ComparisonAnalytics
-    comparison_analytics = ComparisonAnalytics()
-    
+            st.error(f"❌ Error loading game data: {str(e)}")
+            empty_state("Unable to load game data", icon="⚠️")
+
+# ALL GAMES COMPARISON VIEW
+if selected_game_id is None:
     section_header(
         "All Games Comparison",
         icon="📊",
@@ -429,19 +416,19 @@ else:
                 empty_state(
                     "No comparison data available",
                     icon="📊",
-                    action_text="Run the ETL pipeline to fetch data for all games"
+                    action_text="Run the ETL pipeline to fetch data"
                 )
         
         except Exception as e:
             st.error(f"❌ Error loading comparison: {str(e)}")
             empty_state("Unable to load comparison data", icon="⚠️")
 
-# Trends (Game-Specific)
+# TRENDS SECTION
 if selected_game_id:
     section_header(
-        f"{selected_game} Trends",
+        "📈 Daily Trends",
         icon="📈",
-        help_text="Shows daily trends over the selected time period. Daily Match Count: Number of matches per day. Daily Player Count: Number of unique players per day. Performance Metrics: Average kills and match duration trends."
+        help_text=f"Daily trends for {selected_game}. Shows match count, player count, and performance metrics over time for the selected period."
     )
     
     with show_loading_spinner("Loading trends..."):
@@ -450,8 +437,8 @@ if selected_game_id:
             
             if not trends:
                 empty_state(
-                    f"No trend data available for {selected_game}",
-                    icon="📊",
+                    "No trend data available",
+                    icon="📈",
                     action_text="Run the ETL pipeline to fetch data"
                 )
             else:
@@ -534,165 +521,195 @@ if selected_game_id:
 
 # Additional Game-Specific Metrics (if not already shown)
 if selected_game_id:
-    # Only show if we haven't shown game-specific metrics in overview
-    if selected_game_id != "dota2":  # Dota 2 already shown in overview
-        col_game_header, col_game_info = st.columns([10, 1])
-        with col_game_header:
-            st.header(f"🎮 {selected_game} Additional Metrics")
-        with col_game_info:
-            game_info_text = {
-                "csgo": "CS:GO specific metrics: Match type statistics, average K/D/A ratios, and performance metrics.",
-                "valorant": "Valorant specific metrics: Match type distribution and map statistics from Riot API.",
-                "pubg": "PUBG specific metrics: Match type and map statistics.",
-            }.get(selected_game_id, "Game-specific analytics and metrics.")
-            st.markdown(f"""
-            <div style="margin-top: 20px;">
-                <span title="{game_info_text}">ℹ️</span>
-            </div>
-            """, unsafe_allow_html=True)
+    section_header(
+        "🎯 Additional Game-Specific Metrics",
+        icon="🎯",
+        help_text=f"Additional game-specific statistics and attributes for {selected_game}."
+    )
     
-    try:
-        game_metrics = game_specific_analytics.get_game_specific_metrics(selected_game_id, days=selected_days)
+    with show_loading_spinner("Loading additional metrics..."):
+        try:
+            game_metrics = game_specific_analytics.get_game_specific_metrics(selected_game_id, days=selected_days)
+            
+            if game_metrics and "message" not in game_metrics:
+                # Dota 2 specific metrics
+                if selected_game_id == "dota2":
+                    if "win_rate" in game_metrics and game_metrics["win_rate"]:
+                        wr = game_metrics["win_rate"]
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Total Matches", wr.get("total_matches", 0))
+                        with col2:
+                            st.metric("Radiant Wins", wr.get("radiant_wins", 0))
+                        with col3:
+                            st.metric("Radiant Win Rate", f"{wr.get('radiant_win_rate', 0):.1f}%")
+                    
+                    if "match_types" in game_metrics and game_metrics["match_types"]:
+                        st.subheader("Match Type Distribution")
+                        match_type_df = pd.DataFrame(game_metrics["match_types"])
+                        if not match_type_df.empty:
+                            fig = px.bar(
+                                match_type_df,
+                                x="type",
+                                y="count",
+                                title="Matches by Type (Real Dota 2 Data)",
+                                labels={"type": "Match Type", "count": "Number of Matches"},
+                                color="count",
+                                color_continuous_scale="viridis",
+                                hover_data={"type": True, "count": True}
+                            )
+                            fig.update_traces(
+                                hovertemplate="<b>%{x}</b><br>Matches: %{y}<br><extra></extra>"
+                            )
+                            fig.update_layout(hovermode="x unified")
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Show detailed stats
+                            st.subheader("Match Type Details")
+                            st.dataframe(match_type_df, use_container_width=True)
+            
+                # CS:GO specific metrics
+                elif selected_game_id == "csgo":
+                    if "match_types" in game_metrics:
+                        st.subheader("CS:GO Match Statistics")
+                        csgo_df = pd.DataFrame(game_metrics["match_types"])
+                        if not csgo_df.empty:
+                            st.dataframe(csgo_df, use_container_width=True)
+            
+                # Valorant specific metrics
+                elif selected_game_id == "valorant":
+                    if "match_types" in game_metrics:
+                        st.subheader("Valorant Match Statistics")
+                        valorant_df = pd.DataFrame(game_metrics["match_types"])
+                        if not valorant_df.empty:
+                            fig = px.bar(
+                                valorant_df,
+                                x="type",
+                                y="match_count",
+                                title="Matches by Type",
+                                labels={"type": "Match Type", "match_count": "Number of Matches"},
+                                hover_data={"type": True, "match_count": True}
+                            )
+                            fig.update_traces(
+                                hovertemplate="<b>%{x}</b><br>Matches: %{y}<br><extra></extra>"
+                            )
+                            fig.update_layout(hovermode="x unified")
+                            st.plotly_chart(fig, use_container_width=True)
+            
+                # PUBG specific metrics
+                elif selected_game_id == "pubg":
+                    if "match_types" in game_metrics:
+                        st.subheader("PUBG Match Statistics")
+                        pubg_df = pd.DataFrame(game_metrics["match_types"])
+                        if not pubg_df.empty:
+                            st.dataframe(pubg_df, use_container_width=True)
+            
+                # COD specific metrics
+                elif selected_game_id == "cod":
+                    if "match_types" in game_metrics:
+                        st.subheader("Call of Duty Match Statistics")
+                        cod_df = pd.DataFrame(game_metrics["match_types"])
+                        if not cod_df.empty:
+                            st.dataframe(cod_df, use_container_width=True)
+            
+            else:
+                empty_state(
+                    "No additional metrics available",
+                    icon="📊",
+                    action_text="Run the ETL pipeline to fetch data"
+                )
         
-        if game_metrics and "message" not in game_metrics:
-            # Dota 2 specific metrics
-            if selected_game_id == "dota2":
-                if "win_rate" in game_metrics and game_metrics["win_rate"]:
-                    wr = game_metrics["win_rate"]
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Matches", wr.get("total_matches", 0))
-                    with col2:
-                        st.metric("Radiant Wins", wr.get("radiant_wins", 0))
-                    with col3:
-                        st.metric("Radiant Win Rate", f"{wr.get('radiant_win_rate', 0):.1f}%")
-                
-                if "match_types" in game_metrics:
-                    st.subheader("Match Type Distribution")
-                    match_type_df = pd.DataFrame(game_metrics["match_types"])
-                    if not match_type_df.empty:
-                        fig = px.bar(
-                            match_type_df,
-                            x="type",
-                            y="count",
-                            title="Matches by Type (Real Dota 2 Data)",
-                            labels={"type": "Match Type", "count": "Number of Matches"},
-                            color="count",
-                            color_continuous_scale="viridis",
-                            hover_data={"type": True, "count": True}
-                        )
-                        fig.update_traces(
-                            hovertemplate="<b>%{x}</b><br>Matches: %{y}<br><extra></extra>"
-                        )
-                        fig.update_layout(hovermode="x unified")
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Show detailed stats
-                        st.subheader("Match Type Details")
-                        st.dataframe(match_type_df, use_container_width=True)
-            
-            # CS:GO specific metrics
-            elif selected_game_id == "csgo":
-                if "match_types" in game_metrics:
-                    st.subheader("CS:GO Match Statistics")
-                    csgo_df = pd.DataFrame(game_metrics["match_types"])
-                    if not csgo_df.empty:
-                        st.dataframe(csgo_df, use_container_width=True)
-            
-            # Valorant specific metrics
-            elif selected_game_id == "valorant":
-                if "match_types" in game_metrics:
-                    st.subheader("Valorant Match Statistics")
-                    valorant_df = pd.DataFrame(game_metrics["match_types"])
-                    if not valorant_df.empty:
-                        fig = px.bar(
-                            valorant_df,
-                            x="type",
-                            y="match_count",
-                            title="Matches by Type",
-                            labels={"type": "Match Type", "match_count": "Number of Matches"},
-                            hover_data={"type": True, "match_count": True}
-                        )
-                        fig.update_traces(
-                            hovertemplate="<b>%{x}</b><br>Matches: %{y}<br><extra></extra>"
-                        )
-                        fig.update_layout(hovermode="x unified")
-                        st.plotly_chart(fig, use_container_width=True)
-            
-            # PUBG specific metrics
-            elif selected_game_id == "pubg":
-                if "match_types" in game_metrics:
-                    st.subheader("PUBG Match Statistics")
-                    pubg_df = pd.DataFrame(game_metrics["match_types"])
-                    if not pubg_df.empty:
-                        st.dataframe(pubg_df, use_container_width=True)
-        else:
-            st.info(f"Game-specific metrics not yet available for {selected_game}")
-    except Exception as e:
-        st.error(f"Error loading game-specific metrics: {str(e)}")
+        except Exception as e:
+            st.error(f"❌ Error loading additional metrics: {str(e)}")
+            empty_state("Unable to load additional metrics", icon="⚠️")
 
-# Top Players (Game-Specific)
+# TOP PLAYERS SECTION
 if selected_game_id:
     section_header(
-        f"{selected_game} Top Players",
+        "🏆 Top Players",
         icon="🏆",
-        help_text="Top players ranked by average score. Shows match count, average K/D/A, and highest score achieved. Data is filtered by the selected time period."
+        help_text=f"Top performing players in {selected_game} based on kills, score, and other performance metrics for the selected period."
     )
     
     with show_loading_spinner("Loading top players..."):
         try:
-            top_players = analytics_service.get_top_players(selected_game_id, limit=10)
+            top_players = analytics_service.get_top_players(selected_game_id, days=selected_days, limit=10)
             
             if not top_players:
                 empty_state(
-                    f"No player data available for {selected_game}",
+                    "No player data available",
                     icon="👤",
-                    action_text="Player data will appear after running the ETL pipeline"
+                    action_text="Run the ETL pipeline to fetch data"
                 )
             else:
-                df_players = pd.DataFrame(top_players)
+                df_top = pd.DataFrame(top_players)
                 
-                # Game-specific column display
-                if selected_game_id == "dota2":
-                    display_cols = ["player_id", "match_count", "avg_kills", "avg_deaths", "avg_assists", "avg_score"]
-                elif selected_game_id in ["csgo", "valorant"]:
-                    display_cols = ["player_id", "match_count", "avg_kills", "avg_deaths", "avg_assists", "avg_score", "max_score"]
-                else:
-                    display_cols = df_players.columns.tolist()
+                col1, col2 = st.columns(2)
                 
-                # Styled dataframe
-                st.dataframe(
-                    df_players[display_cols].style.format({
-                        "avg_kills": "{:.2f}",
-                        "avg_deaths": "{:.2f}",
-                        "avg_assists": "{:.2f}",
-                        "avg_score": "{:.2f}",
-                        "max_score": "{:.2f}",
-                    }).background_gradient(subset=["avg_score"], cmap="YlOrRd"),
-                    use_container_width=True,
-                    height=400
-                )
+                with col1:
+                    st.subheader("Top Players by Kills")
+                    fig = px.bar(
+                        df_top,
+                        x="player_name",
+                        y="total_kills",
+                        title="Top Players by Kills",
+                        labels={"total_kills": "Total Kills", "player_name": "Player"},
+                        color="total_kills",
+                        color_continuous_scale="Reds",
+                        hover_data={"player_name": True, "total_kills": True, "total_deaths": True, "total_assists": True}
+                    )
+                    fig.update_traces(
+                        hovertemplate="<b>%{x}</b><br>Kills: %{y}<br>Deaths: %{customdata[1]:.0f}<br>Assists: %{customdata[2]:.0f}<br><extra></extra>",
+                        customdata=df_top[["total_kills", "total_deaths", "total_assists"]].values
+                    )
+                    fig.update_layout(showlegend=False, hovermode="x unified")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    st.subheader("Top Players by Average Score")
+                    fig = px.bar(
+                        df_top,
+                        x="player_name",
+                        y="avg_score",
+                        title="Top Players by Average Score",
+                        labels={"avg_score": "Average Score", "player_name": "Player"},
+                        color="avg_score",
+                        color_continuous_scale="Purples",
+                        hover_data={"player_name": True, "avg_score": True, "total_matches": True}
+                    )
+                    fig.update_traces(
+                        hovertemplate="<b>%{x}</b><br>Avg Score: %{y:.2f}<br>Matches: %{customdata[1]:.0f}<br><extra></extra>",
+                        customdata=df_top[["avg_score", "total_matches"]].values
+                    )
+                    fig.update_layout(hovermode="x unified")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Top players table
+                st.subheader("Top Players Table")
+                st.dataframe(df_top, use_container_width=True)
                 
                 # Export button
                 st.markdown("---")
-                st.subheader("📥 Export Player Data")
-                create_export_buttons(df_players[display_cols], f"{selected_game}_top_players_{time_period.replace(' ', '_')}")
+                st.subheader("📥 Export Top Players Data")
+                create_export_buttons(df_top, f"{selected_game}_top_players_{time_period.replace(' ', '_')}")
         
         except Exception as e:
             st.error(f"❌ Error loading top players: {str(e)}")
             empty_state("Unable to load player data", icon="⚠️")
 
-# Forecasts
-section_header(
-    "Forecasts & Predictions",
-    icon="🔮",
-    help_text="ML-powered forecasts for player counts and match predictions. Based on historical data trends using time series forecasting models."
-)
-
+# FORECASTS SECTION
 if selected_game_id:
+    section_header(
+        "🔮 Forecasts & Predictions",
+        icon="🔮",
+        help_text=f"ML-powered forecasts for {selected_game}. Predicts player count and match trends for the next 7 days based on historical data."
+    )
+    
     with show_loading_spinner("Generating forecasts..."):
         try:
-            forecasts = forecasting_service.generate_player_count_forecasts(selected_game_id, days=7)
+            forecasts = forecasting_service.generate_player_count_forecasts(
+                selected_game_id, days=7
+            )
             
             if forecasts:
                 df_forecasts = pd.DataFrame(forecasts)
@@ -743,36 +760,23 @@ if selected_game_id:
                 
                 # Forecast table
                 st.subheader("Forecast Details")
-                forecast_display = df_forecasts[["forecast_date", "predicted_value", "confidence_interval_lower", "confidence_interval_upper"]]
-                st.dataframe(
-                    forecast_display.style.format({
-                        "predicted_value": "{:.0f}",
-                        "confidence_interval_lower": "{:.0f}",
-                        "confidence_interval_upper": "{:.0f}",
-                    }).background_gradient(subset=["predicted_value"], cmap="Blues"),
-                    use_container_width=True
-                )
+                forecast_display = df_forecasts[
+                    ["forecast_date", "predicted_value", "confidence_interval_lower", "confidence_interval_upper"]
+                ].copy()
+                forecast_display.columns = ["Date", "Predicted", "Lower Bound", "Upper Bound"]
+                st.dataframe(forecast_display, use_container_width=True)
                 
                 # Export button
                 st.markdown("---")
                 st.subheader("📥 Export Forecast Data")
-                create_export_buttons(forecast_display, f"{selected_game}_forecasts")
+                create_export_buttons(df_forecasts, f"{selected_game}_forecasts")
+            else:
+                empty_state(
+                    "No forecast data available",
+                    icon="🔮",
+                    action_text="Insufficient historical data for forecasting"
+                )
         
         except Exception as e:
             st.error(f"❌ Error generating forecasts: {str(e)}")
-            empty_state("Unable to generate forecasts", icon="⚠️", action_text="Insufficient historical data for forecasting")
-
-# Footer with better styling
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; padding: 2rem; background-color: #f8f9fa; border-radius: 8px; margin-top: 2rem;">
-    <p style="color: #666; margin: 0;">
-        <strong>🎮 Gaming Analytics Dashboard</strong> | Built with Streamlit | 
-        Data updated every 2 minutes | 
-        <a href="https://github.com/your-repo" style="color: #1f77b4;">GitHub</a>
-    </p>
-    <p style="color: #999; font-size: 0.875rem; margin-top: 0.5rem;">
-        Real-time gaming data analytics and predictions
-    </p>
-</div>
-""", unsafe_allow_html=True)
+            empty_state("Unable to generate forecasts", icon="⚠️")
