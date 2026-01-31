@@ -680,11 +680,11 @@ if selected_game_id:
                         labels={"avg_score": "Average Score", "player_name": "Player"},
                         color="avg_score",
                         color_continuous_scale="Purples",
-                        hover_data={"player_name": True, "avg_score": True, "total_matches": True}
+                        hover_data={"player_name": True, "avg_score": True, "match_count": True}
                     )
                     fig.update_traces(
                         hovertemplate="<b>%{x}</b><br>Avg Score: %{y:.2f}<br>Matches: %{customdata[1]:.0f}<br><extra></extra>",
-                        customdata=df_top[["avg_score", "total_matches"]].values
+                        customdata=df_top[["avg_score", "match_count"]].values
                     )
                     fig.update_layout(hovermode="x unified")
                     st.plotly_chart(fig, use_container_width=True)
