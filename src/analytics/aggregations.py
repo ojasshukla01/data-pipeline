@@ -150,15 +150,21 @@ class AnalyticsService:
         finally:
             session.close()
     
-    def get_top_players(self, game_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get top players by score"""
+    def get_top_players(self, game_id: str, days: int = 30, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get top players by score - filtered by time period"""
         session = db_manager.get_session()
         
         try:
+            start_date = datetime.now() - timedelta(days=days)
+            start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
+            
             query = text("""
                 SELECT 
                     ps.player_id,
                     COUNT(*) as match_count,
+                    SUM(ps.kills) as total_kills,
+                    SUM(ps.deaths) as total_deaths,
+                    SUM(ps.assists) as total_assists,
                     AVG(ps.kills) as avg_kills,
                     AVG(ps.deaths) as avg_deaths,
                     AVG(ps.assists) as avg_assists,
@@ -167,6 +173,7 @@ class AnalyticsService:
                 FROM player_stats ps
                 JOIN matches m ON ps.match_id = m.match_id
                 WHERE m.game_id = :game_id
+                    AND m.match_date >= :start_date
                 GROUP BY ps.player_id
                 ORDER BY avg_score DESC
                 LIMIT :limit
@@ -174,19 +181,34 @@ class AnalyticsService:
             
             result = session.execute(query, {
                 "game_id": game_id,
+                "start_date": start_date_str,
                 "limit": limit
             })
             
             players = []
             for row in result:
+                # Get player name if available
+                player_name = f"Player {row[0]}"  # Default name
+                try:
+                    player_query = text("SELECT player_name FROM players WHERE player_id = :player_id")
+                    player_result = session.execute(player_query, {"player_id": row[0]}).fetchone()
+                    if player_result and player_result[0]:
+                        player_name = player_result[0]
+                except:
+                    pass
+                
                 players.append({
                     "player_id": row[0],
+                    "player_name": player_name,
                     "match_count": row[1],
-                    "avg_kills": float(row[2]) if row[2] else 0,
-                    "avg_deaths": float(row[3]) if row[3] else 0,
-                    "avg_assists": float(row[4]) if row[4] else 0,
-                    "avg_score": float(row[5]) if row[5] else 0,
-                    "max_score": float(row[6]) if row[6] else 0,
+                    "total_kills": int(row[2]) if row[2] else 0,
+                    "total_deaths": int(row[3]) if row[3] else 0,
+                    "total_assists": int(row[4]) if row[4] else 0,
+                    "avg_kills": float(row[5]) if row[5] else 0,
+                    "avg_deaths": float(row[6]) if row[6] else 0,
+                    "avg_assists": float(row[7]) if row[7] else 0,
+                    "avg_score": float(row[8]) if row[8] else 0,
+                    "max_score": float(row[9]) if row[9] else 0,
                 })
             
             return players
