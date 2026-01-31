@@ -1,0 +1,2 @@
+# Streamlit Cloud packages configuration
+# This file helps Streamlit Cloud understand the project structure

@@ -67,7 +67,9 @@ analytics_service = AnalyticsService()
 forecasting_service = ForecastingService()
 prediction_service = PredictionService()
 from src.analytics.game_specific import GameSpecificAnalytics
+from src.analytics.comparison import ComparisonAnalytics
 game_specific_analytics = GameSpecificAnalytics()
+comparison_analytics = ComparisonAnalytics()
 
 # Sidebar
 st.sidebar.title("🎮 Gaming Analytics")

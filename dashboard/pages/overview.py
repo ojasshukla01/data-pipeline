@@ -11,8 +11,10 @@ from sqlalchemy import text
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
+# Add project root to Python path for Streamlit Cloud compatibility
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # IMPORTANT: set_page_config() MUST be called first
 st.set_page_config(
