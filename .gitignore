@@ -97,3 +97,6 @@ test_*.py.bak
 # Keep test files in tests/ directory only
 # Remove any test files from root
 /test_*.py
+
+# GitHub workflows (requires workflow scope - add manually via GitHub UI)
+.github/workflows/
