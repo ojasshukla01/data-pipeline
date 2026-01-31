@@ -2,19 +2,22 @@
 Overview Page
 Comprehensive dashboard overview and system status
 """
+import sys
+from pathlib import Path
+
+# CRITICAL: Add project root to Python path FIRST, before any other imports
+# This ensures Streamlit Cloud can find the src and config modules
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Now import standard libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from sqlalchemy import text
-import sys
-from pathlib import Path
-
-# Add project root to Python path for Streamlit Cloud compatibility
-project_root = Path(__file__).parent.parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
 
 # IMPORTANT: set_page_config() MUST be called first
 st.set_page_config(
