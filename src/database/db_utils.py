@@ -25,42 +25,41 @@ class DatabaseManager:
     def _initialize_engine(self):
         """Initialize database engine"""
         if self.config.is_duckdb():
-            # DuckDB connection - use duckdb-engine
+            # DuckDB connection - use direct DuckDB (no duckdb-engine needed)
             try:
-                import duckdb_engine
+                import duckdb
                 db_path = self.config.DUCKDB_PATH
                 os.makedirs(os.path.dirname(db_path), exist_ok=True)
                 
-                # Create DuckDB connection string
+                # Test DuckDB connection
+                conn = duckdb.connect(db_path)
+                conn.close()
+                
+                # Use SQLite for SQLAlchemy ORM compatibility
+                # DuckDB can be used directly via duckdb.connect() for raw queries
+                sqlite_path = db_path.replace('.duckdb', '.db')
                 self.engine = create_engine(
-                    f"duckdb:///{db_path}",
+                    f"sqlite:///{sqlite_path}",
                     poolclass=NullPool,
                 )
-                logger.info(f"Initialized DuckDB connection: {db_path}")
+                logger.info(f"Initialized DuckDB (using SQLite for ORM): {db_path}")
             except ImportError:
-                logger.warning("duckdb-engine not installed. Trying direct DuckDB connection...")
-                try:
-                    # Try direct DuckDB connection as fallback
-                    import duckdb
-                    db_path = self.config.DUCKDB_PATH
-                    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-                    
-                    # Create a simple connection for now
-                    # Note: This is a workaround - ideally use duckdb-engine
-                    conn = duckdb.connect(db_path)
-                    conn.close()
-                    
-                    # Use SQLite-compatible connection string as workaround
-                    self.engine = create_engine(
-                        f"sqlite:///{db_path.replace('.duckdb', '.db')}",
-                        poolclass=NullPool,
-                    )
-                    logger.warning(f"Using SQLite fallback. For full DuckDB support, install: pip install duckdb-engine")
-                except ImportError:
-                    raise ImportError(
-                        "DuckDB not available. Please install: pip install duckdb duckdb-engine\n"
-                        "Or use PostgreSQL by setting DATABASE_URL in .env"
-                    )
+                logger.warning("DuckDB not installed. Using SQLite fallback.")
+                sqlite_path = self.config.DUCKDB_PATH.replace('.duckdb', '.db')
+                os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+                self.engine = create_engine(
+                    f"sqlite:///{sqlite_path}",
+                    poolclass=NullPool,
+                )
+                logger.warning("Using SQLite. Install duckdb for better performance: pip install duckdb")
+            except Exception as e:
+                logger.warning(f"DuckDB connection failed: {str(e)}. Using SQLite fallback.")
+                sqlite_path = self.config.DUCKDB_PATH.replace('.duckdb', '.db')
+                os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+                self.engine = create_engine(
+                    f"sqlite:///{sqlite_path}",
+                    poolclass=NullPool,
+                )
         else:
             # PostgreSQL connection
             self.engine = create_engine(
