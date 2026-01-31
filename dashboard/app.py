@@ -12,10 +12,6 @@ project_root = Path(__file__).parent.parent.resolve()
 project_root_str = str(project_root)
 if project_root_str not in sys.path:
     sys.path.insert(0, project_root_str)
-# Also add current directory to path (for Streamlit Cloud)
-current_dir = str(Path(__file__).parent.parent.resolve())
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
 
 # Now import standard libraries
 import streamlit as st

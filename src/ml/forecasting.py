@@ -27,7 +27,8 @@ class ForecastingService:
         historical_data = self._get_historical_match_data(game_id)
         
         if len(historical_data) < 7:
-            logger.warning(f"Insufficient data for {game_id}, generating simple forecasts")
+            # This is expected when there's not enough historical data
+            # Return simple forecasts instead of logging a warning
             return self._generate_simple_forecasts(game_id, days)
         
         # Prepare data
